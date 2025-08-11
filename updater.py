@@ -23,7 +23,7 @@ CONFIG = {
     "plugins_dir": "/home/zfzfg/minecraftserver/purpur2/plugins",
     "plugins_old_dir": "/home/zfzfg/minecraftserver/purpur2/pluginsold",
     "plugin_errors_dir": "/home/zfzfg/minecraftserver/purpur2/pluginerrors",
-    "minecraft_version": "1.21.4",  # Anpassbare Minecraft-Version
+    "minecraft_version": "1.21.8",  # Anpassbare Minecraft-Version
     "check_interval": 36000,  # 10 Stunden in Sekunden
     "log_file": "/home/zfzfg/minecraftserver/purpur2/updater.log",
     "state_file": "/home/zfzfg/minecraftserver/purpur2/updater_state.json"
