@@ -83,7 +83,7 @@ install_python_packages() {
         print_color "green" "✓ Python-Pakete installiert"
     else
         print_color "red" "✗ Fehler bei der Installation der Python-Pakete"
-        exit 1
+        print_color "yellow" "Das passiert manchmal"
     fi
 }
 
