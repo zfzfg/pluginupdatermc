@@ -1,69 +1,59 @@
 #!/bin/bash
 # ============================================
 # Minecraft Server Start-Skript mit Auto-Updates
+# Übernimmt die Einstellungen der vorhandenen start_minecraft.sh
 # ============================================
 
-# Konfiguration
+# Konfiguration (aus deiner vorhandenen start_minecraft.sh)
 SERVER_DIR="/home/zfzfg/minecraftserver/purpur2"
 SCREEN_NAME="minecraft"
-MEMORY_MIN="2G"
-MEMORY_MAX="4G"
-SERVER_JAR="server.jar"
+MEMORY="22G"  # 22GB RAM wie in deiner Konfiguration
+SERVER_JAR="purpur.jar"
 UPDATER_SCRIPT="plugin_updater.py"
 LOG_FILE="$SERVER_DIR/server_start.log"
 
 # Farben für Output
-RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+RED='\033[0;31m'
+NC='\033[0m'
 
-# Logging-Funktion
+# Logging
 log() {
     echo -e "$1"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
 }
 
-# Prüfe ob als richtiger Benutzer
-if [ "$USER" != "zfzfg" ]; then
-    log "${RED}Fehler: Dieses Skript muss als Benutzer 'zfzfg' ausgeführt werden${NC}"
-    log "Verwende: sudo -u zfzfg $0"
-    exit 1
-fi
-
-# Wechsle ins Server-Verzeichnis
+# In das Verzeichnis wechseln
 cd "$SERVER_DIR" || exit 1
 
-# Funktion: Server Status prüfen
+# Funktion: Server läuft prüfen
 is_server_running() {
     screen -list | grep -q "$SCREEN_NAME"
     return $?
 }
 
-# Funktion: Updates durchführen
-run_updates() {
-    log "${YELLOW}Prüfe auf Updates...${NC}"
+# Funktion: Update-Check durchführen
+check_updates() {
+    log "${YELLOW}Prüfe auf Plugin und Server Updates...${NC}"
     
     # Prüfe ob Python-Umgebung existiert
     if [ ! -d "$SERVER_DIR/updater_venv" ]; then
-        log "${YELLOW}Erstelle Python-Umgebung...${NC}"
-        python3 -m venv updater_venv
-        source updater_venv/bin/activate
-        pip install requests
-        deactivate
+        log "${YELLOW}Python-Umgebung nicht gefunden, überspringe Updates${NC}"
+        return 0
     fi
     
-    # Führe Update-Check aus
+    # Führe Update-Check aus (mit --startup Flag für Server-Start)
     if [ -f "$SERVER_DIR/$UPDATER_SCRIPT" ]; then
-        "$SERVER_DIR/updater_venv/bin/python" "$SERVER_DIR/$UPDATER_SCRIPT" --startup
+        "$SERVER_DIR/updater_venv/bin/python" "$SERVER_DIR/$UPDATER_SCRIPT" --startup 2>&1 | tee -a "$LOG_FILE"
         
-        if [ $? -eq 0 ]; then
-            log "${GREEN}✓ Update-Check abgeschlossen${NC}"
+        if [ ${PIPESTATUS[0]} -eq 0 ]; then
+            log "${GREEN}✓ Update-Check erfolgreich${NC}"
         else
-            log "${RED}✗ Fehler beim Update-Check${NC}"
+            log "${RED}✗ Fehler beim Update-Check (Server startet trotzdem)${NC}"
         fi
     else
-        log "${YELLOW}Update-Skript nicht gefunden, überspringe Updates${NC}"
+        log "${YELLOW}Update-Skript nicht gefunden, starte ohne Updates${NC}"
     fi
 }
 
@@ -75,18 +65,10 @@ start_server() {
         return 0
     fi
     
-    log "${GREEN}Starte Minecraft Server...${NC}"
+    log "${GREEN}Starte Minecraft Server mit 22GB RAM...${NC}"
     
-    # Starte Server in Screen-Session
-    screen -dmS "$SCREEN_NAME" java -Xms"$MEMORY_MIN" -Xmx"$MEMORY_MAX" \
-        -XX:+UseG1GC -XX:+ParallelRefProcEnabled -XX:MaxGCPauseMillis=200 \
-        -XX:+UnlockExperimentalVMOptions -XX:+DisableExplicitGC -XX:+AlwaysPreTouch \
-        -XX:G1HeapWastePercent=5 -XX:G1MixedGCCountTarget=4 \
-        -XX:G1MixedGCLiveThresholdPercent=90 -XX:G1RSetUpdatingPauseTimePercent=5 \
-        -XX:SurvivorRatio=32 -XX:+PerfDisableSharedMem -XX:MaxTenuringThreshold=1 \
-        -Dusing.aikars.flags=https://mcflags.emc.gs \
-        -Daikars.new.flags=true \
-        -jar "$SERVER_JAR" nogui
+    # Starte den Server genau wie in deiner vorhandenen start_minecraft.sh
+    screen -dmS "$SCREEN_NAME" java -Xms"$MEMORY" -Xmx"$MEMORY" -jar "$SERVER_JAR" nogui
     
     # Warte kurz
     sleep 5
@@ -110,12 +92,16 @@ stop_server() {
     
     log "${YELLOW}Stoppe Server...${NC}"
     
-    # Sende Stop-Befehl
+    # Ankündigung im Spiel
     screen -S "$SCREEN_NAME" -X stuff "say Server wird in 10 Sekunden gestoppt...\n"
-    sleep 10
+    sleep 5
+    screen -S "$SCREEN_NAME" -X stuff "say 5 Sekunden...\n"
+    sleep 5
+    
+    # Stoppe Server
     screen -S "$SCREEN_NAME" -X stuff "stop\n"
     
-    # Warte auf Shutdown
+    # Warte auf Shutdown (max 30 Sekunden)
     local timeout=30
     while [ $timeout -gt 0 ] && is_server_running; do
         sleep 1
@@ -130,71 +116,76 @@ stop_server() {
     log "${GREEN}✓ Server gestoppt${NC}"
 }
 
-# Funktion: Server neustarten
-restart_server() {
-    stop_server
-    sleep 5
-    run_updates
-    start_server
-}
-
-# Hauptprogramm
-main() {
-    case "${1:-start}" in
-        start)
-            log "${GREEN}=== Minecraft Server Start ===${NC}"
-            run_updates
-            start_server
-            ;;
-        
-        stop)
-            log "${YELLOW}=== Minecraft Server Stop ===${NC}"
+# Hauptlogik
+case "${1:-start}" in
+    start)
+        # Standard-Start mit Update-Check
+        log "${GREEN}=== Minecraft Server Start ===${NC}"
+        check_updates
+        start_server
+        ;;
+    
+    start-no-update)
+        # Start ohne Update-Check (wie die alte start_minecraft.sh)
+        log "${GREEN}=== Minecraft Server Start (ohne Updates) ===${NC}"
+        start_server
+        ;;
+    
+    stop)
+        log "${YELLOW}=== Minecraft Server Stop ===${NC}"
+        stop_server
+        ;;
+    
+    restart)
+        log "${YELLOW}=== Minecraft Server Neustart ===${NC}"
+        stop_server
+        sleep 5
+        check_updates
+        start_server
+        ;;
+    
+    update)
+        log "${YELLOW}=== Erzwinge Update-Prüfung ===${NC}"
+        if is_server_running; then
+            log "${YELLOW}Stoppe Server für Updates...${NC}"
             stop_server
-            ;;
-        
-        restart)
-            log "${YELLOW}=== Minecraft Server Neustart ===${NC}"
-            restart_server
-            ;;
-        
-        update)
-            log "${YELLOW}=== Manuelle Update-Prüfung ===${NC}"
-            stop_server
-            run_updates
-            start_server
-            ;;
-        
-        status)
-            if is_server_running; then
-                echo -e "${GREEN}✓ Server läuft${NC}"
-                echo "Screen-Session: $SCREEN_NAME"
-                echo "Verbinde mit: screen -r $SCREEN_NAME"
-            else
-                echo -e "${RED}✗ Server läuft nicht${NC}"
-            fi
-            ;;
-        
-        attach|console)
-            if is_server_running; then
-                screen -r "$SCREEN_NAME"
-            else
-                log "${RED}Server läuft nicht${NC}"
-            fi
-            ;;
-        
-        *)
-            echo "Verwendung: $0 {start|stop|restart|update|status|attach}"
-            echo ""
-            echo "  start    - Startet den Server (mit Update-Check)"
-            echo "  stop     - Stoppt den Server"
-            echo "  restart  - Neustart mit Update-Check"
-            echo "  update   - Stoppt Server, prüft Updates, startet neu"
-            echo "  status   - Zeigt Server-Status"
-            echo "  attach   - Verbindet zur Server-Konsole (Strg+A dann D zum Verlassen)"
-            exit 1
-            ;;
-    esac
-}
+            sleep 5
+        fi
+        check_updates
+        start_server
+        ;;
+    
+    status)
+        if is_server_running; then
+            echo -e "${GREEN}✓ Server läuft${NC}"
+            echo "Screen-Session: $SCREEN_NAME"
+            echo "RAM: $MEMORY"
+            echo "Verbinde mit: screen -r $SCREEN_NAME"
+        else
+            echo -e "${RED}✗ Server läuft nicht${NC}"
+        fi
+        ;;
+    
+    console|attach)
+        if is_server_running; then
+            screen -r "$SCREEN_NAME"
+        else
+            log "${RED}Server läuft nicht${NC}"
+        fi
+        ;;
+    
+    *)
+        echo "Verwendung: $0 {start|start-no-update|stop|restart|update|status|console}"
+        echo ""
+        echo "  start           - Startet Server MIT Update-Check (Standard)"
+        echo "  start-no-update - Startet Server OHNE Update-Check (wie alte Version)"
+        echo "  stop            - Stoppt den Server"
+        echo "  restart         - Neustart mit Update-Check"
+        echo "  update          - Erzwingt Update-Check mit Neustart"
+        echo "  status          - Zeigt Server-Status"
+        echo "  console         - Öffnet Server-Konsole (Strg+A dann D zum Verlassen)"
+        exit 1
+        ;;
+esac
 
-# Skript ausführen
-main "$@"
+exit 0
