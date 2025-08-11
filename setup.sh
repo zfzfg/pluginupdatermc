@@ -3,7 +3,7 @@
 # Pfad: /home/zfzfg/minecraftserver/purpur2/setup.sh
 
 SERVER_DIR="/home/zfzfg/minecraftserver/purpur2"
-MINECRAFT_VERSION="1.21.4"  # Standard-Version, kann angepasst werden
+MINECRAFT_VERSION="1.21.8"  # Standard-Version, kann angepasst werden
 
 echo "======================================="
 echo "Minecraft Server Updater - Installation"
